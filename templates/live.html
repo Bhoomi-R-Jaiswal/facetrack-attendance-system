@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Session</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Segoe UI, sans-serif; background: #0f172a; color: #e2e8f0; }
+    nav { background: #1e293b; padding: 14px 30px; display: flex; align-items: center; gap: 30px; border-bottom: 1px solid #334155; }
+    nav h1 { font-size: 18px; font-weight: 600; color: #38bdf8; }
+    nav a { color: #94a3b8; text-decoration: none; font-size: 14px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    .camera-box { background: #000; border-radius: 12px; overflow: hidden; }
+    .camera-box img { width: 100%; display: block; }
+    .no-feed { padding: 80px; text-align: center; color: #475569; font-size: 14px; }
+    .sidebar { display: flex; flex-direction: column; gap: 16px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+    .card h3 { font-size: 12px; color: #64748b; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .stat { font-size: 28px; font-weight: 600; color: #38bdf8; }
+    .progress-bar { background: #0f172a; border-radius: 20px; height: 8px; margin: 8px 0; overflow: hidden; }
+    .progress-fill { height: 8px; background: #3b82f6; border-radius: 20px; transition: width 0.5s; }
+    .log { height: 200px; overflow-y: auto; font-size: 12px; color: #64748b; line-height: 1.8; }
+    .detected-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { background: #166534; color: #4ade80; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; }
+    .btn-red { background: #dc2626; color: #fff; }
+    .done-box { background: #166534; border-radius: 12px; padding: 20px; display: none; margin-top: 16px; }
+    .done-box h2 { color: #4ade80; margin-bottom: 8px; }
+    .done-box p { font-size: 13px; color: #bbf7d0; }
+  </style>
+</head>
+<body>
+<nav>
+  <h1>Attendance System</h1>
+  <a href="/">Dashboard</a>
+  <a href="/live">Live Session</a>
+  <a href="/students">Students</a>
+  <a href="/reports">Reports</a>
+</nav>
+<div class="container">
+  <div>
+    <div class="camera-box">
+      <img id="feed" src="" alt="" style="display:none">
+      <div class="no-feed" id="noFeed">Waiting for camera feed...</div>
+    </div>
+    <div class="done-box" id="doneBox">
+      <h2>Session Complete</h2>
+      <p id="doneMsg"></p>
+      <br><a href="/reports" style="color:#4ade80">View Report</a>
+    </div>
+  </div>
+  <div class="sidebar">
+    <div class="card">
+      <h3>Progress</h3>
+      <div class="stat" id="snapStat">0 / 5</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <p style="font-size:12px; color:#64748b; margin-top:6px;">Next snap in: <span id="countdown">-</span></p>
+    </div>
+    <div class="card">
+      <h3>Currently Detected</h3>
+      <div class="detected-list" id="detectedList"><span style="font-size:12px;color:#475569">No one detected yet</span></div>
+    </div>
+    <div class="card">
+      <h3>Snapshot Log</h3>
+      <div class="log" id="log">Waiting for first snapshot...</div>
+    </div>
+    <button class="btn btn-red" onclick="stopSession()">Stop Session</button>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+socket.on("frame", function(data) {
+  const feed = document.getElementById("feed");
+  feed.src = "data:image/jpeg;base64," + data.img;
+  feed.style.display = "block";
+  document.getElementById("noFeed").style.display = "none";
+  document.getElementById("snapStat").textContent = data.snap_count + " / " + data.total_snaps;
+  document.getElementById("progressFill").style.width = (data.snap_count / data.total_snaps * 100) + "%";
+  document.getElementById("countdown").textContent = data.time_remaining;
+  const dl = document.getElementById("detectedList");
+  if (data.detected.length > 0) {
+    dl.innerHTML = data.detected.map(n => "<span class='chip'>" + n + "</span>").join("");
+  } else {
+    dl.innerHTML = "<span style='font-size:12px;color:#475569'>No one detected</span>";
+  }
+});
+socket.on("snap_taken", function(data) {
+  const log = document.getElementById("log");
+  log.innerHTML += "<div>" + data.log + "</div>";
+  log.scrollTop = log.scrollHeight;
+});
+socket.on("session_done", function(data) {
+  document.getElementById("doneBox").style.display = "block";
+  document.getElementById("doneMsg").textContent = "Present: " + data.present + "/" + data.total + " | Absent: " + data.absent + " | " + data.pct + "% attendance. Excel report emailed to faculty.";
+  document.getElementById("feed").style.display = "none";
+  document.getElementById("noFeed").style.display = "block";
+  document.getElementById("noFeed").textContent = "Session complete.";
+});
+async function stopSession() {
+  await fetch("/stop", { method: "POST" });
+  window.location.href = "/";
+}
+</script>
+</body>
+</html>
